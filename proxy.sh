@@ -53,7 +53,8 @@ http_access allow all
 
 # cache off, memory/disk swap dir skipped
 cache deny all
-pid_filename /run/squid/squid.pid
+pid_filename /var/run/squid.pid
+max_filedescriptors 65535
 coredump_dir /var/cache/squid
 access_log /var/log/squid/access.log squid
 cache_log /var/log/squid/cache.log
@@ -70,13 +71,14 @@ if squid -k parse 2>&1 | grep -iE 'error|fatal'; then
   exit 1
 fi
 
-# 3. Fix: Hentikan proses squid lama (jika ada) & turunkan ulimit agar tidak Bad file descriptor di Docker
+# 3. Daftarkan squid di runlevel default agar otomatis hidup setelah reboot
+rc-update add squid default >/dev/null 2>&1 || true
+
+# Hentikan instance lama, lalu start lewat OpenRC (bukan binary langsung)
+rc-service squid stop >/dev/null 2>&1 || true
 pkill -9 squid >/dev/null 2>&1 || true
 sleep 1
-ulimit -n 65535
-
-# Jalankan langsung binary squid (bypass OpenRC yang sering gagal di container)
-squid -f "$CONF"
+rc-service squid start
 
 # Tunggu port aktif (maksimal 10 detik)
 for i in $(seq 1 10); do
